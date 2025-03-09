@@ -1,5 +1,7 @@
 # libsm64 - Rust Bindings
 
+modified version to compile using `wasm32-unknown-emscripten` target for wasm web builds! 
+
 [Documentation](https://nickmass.com/doc/libsm64/index.html)
 
 This is a thin layer of rust bindings over the very excellent [libsm64 project](https://github.com/libsm64/libsm64).

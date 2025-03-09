@@ -1,43 +1,16 @@
-use std::env;
+use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
-const C_FILES: &[&str] = &[
-    "libsm64/src/debug_print.c",
-    "libsm64/src/decomp/engine/geo_layout.c",
-    "libsm64/src/decomp/engine/graph_node.c",
-    "libsm64/src/decomp/engine/graph_node_manager.c",
-    "libsm64/src/decomp/engine/guMtxF2L.c",
-    "libsm64/src/decomp/engine/math_util.c",
-    "libsm64/src/decomp/engine/surface_collision.c",
-    "libsm64/src/decomp/game/behavior_actions.c",
-    "libsm64/src/decomp/game/interaction.c",
-    "libsm64/src/decomp/game/mario_actions_airborne.c",
-    "libsm64/src/decomp/game/mario_actions_automatic.c",
-    "libsm64/src/decomp/game/mario_actions_cutscene.c",
-    "libsm64/src/decomp/game/mario_actions_moving.c",
-    "libsm64/src/decomp/game/mario_actions_object.c",
-    "libsm64/src/decomp/game/mario_actions_stationary.c",
-    "libsm64/src/decomp/game/mario_actions_submerged.c",
-    "libsm64/src/decomp/game/mario.c",
-    "libsm64/src/decomp/game/mario_misc.c",
-    "libsm64/src/decomp/game/mario_step.c",
-    "libsm64/src/decomp/game/object_stuff.c",
-    "libsm64/src/decomp/game/platform_displacement.c",
-    "libsm64/src/decomp/game/rendering_graph_node.c",
-    "libsm64/src/decomp/global_state.c",
-    "libsm64/src/decomp/mario/geo.inc.c",
-    "libsm64/src/decomp/mario/model.inc.c",
-    "libsm64/src/decomp/memory.c",
-    "libsm64/src/decomp/tools/libmio0.c",
-    "libsm64/src/decomp/tools/n64graphics.c",
-    "libsm64/src/decomp/tools/utils.c",
-    "libsm64/src/gfx_adapter.c",
-    "libsm64/src/libsm64.c",
-    "libsm64/src/load_anim_data.c",
-    "libsm64/src/load_surfaces.c",
-    "libsm64/src/load_tex_data.c",
-    "libsm64/src/obj_pool.c",
+const SRC_DIRS: &[&str] = &[
+    "libsm64/src",
+    "libsm64/src/decomp",
+    "libsm64/src/decomp/engine",
+    "libsm64/src/decomp/include/PR",
+    "libsm64/src/decomp/game",
+    "libsm64/src/decomp/pc",
+    "libsm64/src/decomp/mario",
+    "libsm64/src/decomp/tools",
 ];
 
 const MARIO_GEO: &str = "libsm64/src/decomp/mario/geo.inc.c";
@@ -51,17 +24,48 @@ fn main() {
             .expect("Unable to download mario geometry");
     }
 
+    let mut c_files: Vec<String> = Vec::new();
+    // ugly code but it works
+    for dir in SRC_DIRS {
+        let mut files: Vec<String> = fs::read_dir(dir)
+            .expect(dir)
+            .filter_map(|entry| {
+                let path = entry.ok()?.path();
+                if !path.is_file() {
+                    return None;
+                }
+                if path.extension().unwrap().to_str() != Some("c") {
+                    return None;
+                }
+                path.to_str().map(|s| s.to_owned())
+            })
+            .collect();
+        c_files.append(&mut files);
+    }
+
     cc::Build::new()
-        .files(C_FILES)
+        .files(c_files)
         .warnings(false)
+        .compiler("emcc")
+        .flag("-fno-strict-aliasing")
+        .flag("-fPIC")
+        .flag("-g")
+        .define("SM64_LIB_EXPORT", None)
+        .define("GBI_FLOATS", None)
+        .define("VERSION_US", None)
+        .include("libsm64/src/decomp/include")
+        .target("wasm32-unknown-emscripten")
         .compile("sm64");
 
-    let bindings = bindgen::Builder::default()
+    let bindings = bindgen::builder()
         .header("libsm64/src/libsm64.h")
+        .clang_arg("-fvisibility=default")
+        .generate_inline_functions(true)
         .generate()
         .expect("Unable to generate libsm64 bindings");
 
-    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let out_dir = std::env::var("OUT_DIR").unwrap();
+    let out_path = PathBuf::from(&out_dir);
     bindings
         .write_to_file(out_path.join("bindings.rs"))
         .expect("Could not write C bindings");

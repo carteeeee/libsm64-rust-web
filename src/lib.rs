@@ -132,11 +132,7 @@ impl Sm64 {
             ];
 
             unsafe {
-                libsm64_sys::sm64_global_init(
-                    rom_data.as_mut_ptr(),
-                    texture_data.as_mut_ptr(),
-                    None,
-                );
+                libsm64_sys::sm64_global_init(rom_data.as_mut_ptr(), texture_data.as_mut_ptr());
             }
 
             Sm64Inner {
@@ -163,7 +159,7 @@ impl Sm64 {
     }
 
     /// Create a new instancec of Mario that spawns at the point indicated by x/y/z, he must be placed above a surface or an error will be returned
-    pub fn create_mario(&mut self, x: i16, y: i16, z: i16) -> Result<Mario, Error> {
+    pub fn create_mario(&mut self, x: f32, y: f32, z: f32) -> Result<Mario, Error> {
         let mario_id = unsafe { libsm64_sys::sm64_mario_create(x, y, z) };
 
         if mario_id < 0 {
@@ -222,6 +218,10 @@ impl Mario {
             velocity: [0.0, 0.0, 0.0],
             faceAngle: 0.0,
             health: 0,
+            action: 0,
+            flags: 0,
+            particleFlags: 0,
+            invincTimer: 0,
         };
 
         let tris = unsafe {
@@ -357,7 +357,7 @@ pub struct LevelTriangle {
     /// The verticies of the triangle. Super Mario 64 using integer math for its collision detection expect to have to scale your vertexes appropriately to use them for level geometry
     ///
     /// **Note:** The order of the verticies is important, Mario will only collide with the front face of the geometry
-    pub vertices: (Point3<i16>, Point3<i16>, Point3<i16>),
+    pub vertices: (Point3<i32>, Point3<i32>, Point3<i32>),
 }
 
 /// The input for a frame of Mario's logic
@@ -404,6 +404,14 @@ pub struct MarioState {
     pub face_angle: f32,
     /// Mario's current health
     pub health: i16,
+    /// Mario's current action
+    pub action: u32,
+    /// Mario's flags
+    pub flags: u32,
+    /// Mario's Particle Flags
+    pub particle_flags: u32,
+    /// Mario's Invincibility Timer
+    pub invinc_timer: i16,
 }
 
 impl From<libsm64_sys::SM64MarioState> for MarioState {
@@ -423,6 +431,10 @@ impl From<libsm64_sys::SM64MarioState> for MarioState {
             velocity,
             face_angle: state.faceAngle,
             health: state.health,
+            action: state.action,
+            flags: state.flags,
+            particle_flags: state.particleFlags,
+            invinc_timer: state.invincTimer,
         }
     }
 }
